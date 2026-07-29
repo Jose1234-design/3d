@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CubeSat - Cinematic 3D Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            background-color: #050510;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            height: 600vh; /* Enough space for the long scroll animation */
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+        /* UI Overlay Layer */
+        .ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 4rem;
+            box-sizing: border-box;
+        }
+        /* Glassmorphism UI Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            width: fit-content;
+            max-width: 500px;
+        }
+        .header-text {
+            position: absolute;
+            top: 4rem;
+            left: 4rem;
+        }
+        .header-text h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #95a1c4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 40px rgba(20, 80, 255, 0.1);
+        }
+        .header-text p {
+            font-size: 1rem;
+            color: #8b93a7;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            margin-top: 0.5rem;
+            -webkit-text-fill-color: #8b93a7;
+        }
+        .bottom-ui {
+            position: absolute;
+            bottom: 4rem;
+            left: 4rem;
+        }
+        .bottom-ui .subtext {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .bottom-ui .interactive-hint {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .scroll-arrow {
+            width: 2px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ffffff, transparent);
+            animation: pulse-down 2s infinite;
+        }
+        @keyframes pulse-down {
+            0% { transform: translateY(-10px); opacity: 0; }
+            50% { transform: translateY(10px); opacity: 1; }
+            100% { transform: translateY(-10px); opacity: 0; }
+        }
+        .progress-container {
+            position: absolute;
+            right: 4rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 1rem;
+        }
+        .progress-bar-track {
+            width: 2px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+        }
+        .progress-bar-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background: #ffffff;
+            border-radius: 2px;
+            transition: height 0.1s linear;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        .progress-text {
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        @media (max-width: 768px) {
+            .ui-layer { padding: 1.5rem; }
+            .header-text { top: 1.5rem; left: 1.5rem; }
+            .header-text h1 { font-size: 1.8rem; }
+            .bottom-ui { bottom: 1.5rem; left: 1.5rem; }
+            .progress-container { right: 1.5rem; }
+            .glass-card { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="ui-layer">
+        <div class="glass-card header-text">
+            <h1>CubeSat<br>Core Design</h1>
+            <p>Next-Gen Modular Engineering</p>
+        </div>
+
+        <div class="bottom-ui">
+            <div class="glass-card" style="padding: 1.2rem 2rem;">
+                <div class="interactive-hint">
+                    <div class="scroll-arrow"></div>
+                    <div>
+                        <div class="subtext">Scroll to initiate</div>
+                        <div class="subtext" style="color: rgba(255,255,255,0.6); margin-top: 4px;">Cinematic Disassembly</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-text">STAGE</div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="stageLabel">ASSEMBLED</div>
+        </div>
+    </div>
+
+    <!-- Three.js and GSAP Libraries -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import gsap from 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm';
+        import { ScrollTrigger } from 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger.js';
+
+        gsap.registerPlugin(ScrollTrigger);
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#050510');
+
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(4, 2, 6);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // --- POST-PROCESSING (Bloom/Cinematic Glows) ---
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.2, 0.1);
+        bloomPass.strength = 0.6; // Subtle premium glow
+        bloomPass.radius = 0.5;
+        bloomPass.threshold = 0.1;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        keyLight.position.set(5, 10, 7);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 1024;
+        keyLight.shadow.mapSize.height = 1024;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0x4488ff, 1);
+        rimLight.position.set(-3, 1, -5);
+        scene.add(rimLight);
+
+        const pointLight = new THREE.PointLight(0x4488ff, 50, 10);
+        pointLight.position.set(0, 0, 0);
+        scene.add(pointLight);
+
+        // --- SCENE PARTICLES (Stars) ---
+        const starsGeo = new THREE.BufferGeometry();
+        const starsCount = 2000;
+        const positions = new Float32Array(starsCount * 3);
+        for (let i = 0; i < starsCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 100;
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8 });
+        const stars = new THREE.Points(starsGeo, starMat);
+        scene.add(stars);
+
+        // --- BUILD THE CUBESAT MODEL ---
+        // Textures (Procedural)
+        function createPanelTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0c2459'; // Deep tech blue
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#1f478a'; // Lighter grid lines
+            ctx.lineWidth = 4;
+            for(let i=0; i<=512; i+=64) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, 512);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(512, i);
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const panelTex = createPanelTexture();
+        const panelMat = new THREE.MeshPhysicalMaterial({
+            map: panelTex,
+            emissive: new THREE.Color('#1a4d8c'),
+            emissiveIntensity: 0.3,
+            metalness: 0.2,
+            roughness: 0.6,
+        });
+        const frameMat = new THREE.MeshPhysicalMaterial({
+            color: '#8b9bb4',
+            metalness: 0.9,
+            roughness: 0.3,
+            emissive: new THREE.Color('#2a3b5c'),
+            emissiveIntensity: 0.1
+        });
+        const pcbMat = new THREE.MeshPhysicalMaterial({
+            color: '#0c3217',
+            metalness: 0.1,
+            roughness: 0.7,
+            emissive: new THREE.Color('#0c3217'),
+            emissiveIntensity: 0.2
+        });
+        const batteryMat = new THREE.MeshPhysicalMaterial({
+            color: '#1a1a1a',
+            metalness: 0.6,
+            roughness: 0.4,
+        });
+        const orangeMat = new THREE.MeshPhysicalMaterial({
+            color: '#d95319',
+            emissive: '#d95319',
+            emissiveIntensity: 0.1,
+            metalness: 0.4,
+            roughness: 0.6
+        });
+        const chipMat = new THREE.MeshPhysicalMaterial({
+            color: '#eeeeee',
+            metalness: 0.1,
+            roughness: 0.3
+        });
+
+        const rootGroup = new THREE.Group();
+        scene.add(rootGroup);
+
+        // 1. Side Solar Panels
+        const panelW = 0.8, panelH = 0.8, panelD = 0.05;
+        const panels = [];
+        const panelPositions = [
+            { x: 0.9, y: 0, z: 0, rot: 0 }, // Right
+            { x: -0.9, y: 0, z: 0, rot: 0 }, // Left
+            { x: 0, y: 0, z: 0.9, rot: Math.PI/2 }, // Front
+            { x: 0, y: 0, z: -0.9, rot: Math.PI/2 } // Back
+        ];
+        panelPositions.forEach(pos => {
+            const geo = new THREE.BoxGeometry(panelW, panelH, panelD);
+            const mesh = new THREE.Mesh(geo, panelMat);
+            mesh.position.set(pos.x, pos.y, pos.z);
+            mesh.rotation.y = pos.rot;
+            rootGroup.add(mesh);
+            panels.push(mesh);
+        });
+
+        // 2. Central Stack Sub-Groups
+        // Top Cap
+        const topCapGroup = new THREE.Group();
+        const topFrame = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.05, 0.9), frameMat);
+        topFrame.position.y = 0.5;
+        const topPanel = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.8), panelMat);
+        topPanel.position.y = 0.525;
+        topCapGroup.add(topFrame);
+        topCapGroup.add(topPanel);
+        rootGroup.add(topCapGroup);
+
+        // Main Frame (Hollow structure visualization)
+        const frameGroup = new THREE.Group();
+        const pillarMat = new THREE.MeshPhysicalMaterial({ color: '#a0b3cc', metalness: 0.9, roughness: 0.2 });
+        const pillarPos = [[-0.4, 0, -0.4], [-0.4, 0, 0.4], [0.4, 0, 0.4], [0.4, 0, -0.4]];
+        pillarPos.forEach(p => {
+            const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.8, 0.06), pillarMat);
+            pillar.position.set(p[0], p[1], p[2]);
+            frameGroup.add(pillar);
+        });
+        rootGroup.add(frameGroup);
+
+        // PCBs & Chips
+        const pcbGroup = new THREE.Group();
+        const pcb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.6), pcbMat);
+        pcb.position.y = -0.1;
+        const pcb2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.6), pcbMat);
+        pcb2.position.y = -0.3;
+        pcbGroup.add(pcb);
+        pcbGroup.add(pcb2);
+        // Chips
+        const chipGeo = new THREE.BoxGeometry(0.1, 0.02, 0.1);
+        const chip1 = new THREE.Mesh(chipGeo, chipMat);
+        chip1.position.set(-0.15, -0.085, 0.15);
+        const chip2 = new THREE.Mesh(chipGeo, chipMat);
+        chip2.position.set(0.15, -0.285, -0.15);
+        pcbGroup.add(chip1);
+        pcbGroup.add(chip2);
+        rootGroup.add(pcbGroup);
+
+        // Batteries
+        const batteryGroup = new THREE.Group();
+        const bat1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, 0.3), batteryMat);
+        bat1.position.set(-0.25, -0.6, 0);
+        const bat2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, 0.3), batteryMat);
+        bat2.position.set(0.25, -0.6, 0);
+        // Wraps
+        const wrap1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.3), orangeMat);
+        wrap1.position.set(-0.25, -0.5, 0);
+        const wrap2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.3), orangeMat);
+        wrap2.position.set(0.25, -0.5, 0);
+        batteryGroup.add(bat1);
+        batteryGroup.add(bat2);
+        batteryGroup.add(wrap1);
+        batteryGroup.add(wrap2);
+        rootGroup.add(batteryGroup);
+
+        // Base Plate
+        const baseGroup = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.8), frameMat);
+        base.position.y = -0.85;
+        const camMount = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16), new THREE.MeshPhysicalMaterial({color: '#ffffff', metalness: 0.8, roughness: 0.2}));
+        camMount.position.set(0, -0.85, 0.45);
+        baseGroup.add(base);
+        baseGroup.add(camMount);
+        rootGroup.add(baseGroup);
+
+        // --- ANIMATIONS WITH GSAP & SCROLL TRIGGER ---
+        // We need a timeline for 0% to 100% of the scroll
+        const tl = gsap.timeline({
+            scrollTrigger: {
+                trigger: 'body',
+                start: 'top top',
+                end: 'bottom bottom',
+                scrub: 1, // Smoothly syncs with scrollbar
+            },
+            onUpdate: () => {
+                // Update the UI Progress Bar
+                const p = tl.progress();
+                document.getElementById('progressFill').style.height = (p * 100) + '%';
+                let label = 'ASSEMBLED';
+                if (p < 0.2) label = 'ROTATING';
+                else if (p < 0.4) label = 'DISASSEMBLING';
+                else if (p < 0.6) label = 'FLOATING';
+                else if (p < 0.8) label = 'REASSEMBLING';
+                document.getElementById('stageLabel').innerText = label;
+            }
+        });
+
+        // Phase 1: Rotation (0% - 20%)
+        tl.to(rootGroup.rotation, { y: Math.PI * 2, ease: 'none', duration: 20 }, 0);
+
+        // Phase 2: Explosion (20% - 40%)
+        // Panels fly out (X, Z positions)
+        tl.to(panels[0].position, { x: 1.8, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[1].position, { x: -1.8, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[2].position, { z: 1.8, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[3].position, { z: -1.8, ease: 'power2.inOut', duration: 20 }, 20);
+        // Panels tilt slightly
+        tl.to(panels[0].rotation, { z: -0.2, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[1].rotation, { z: 0.2, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[2].rotation, { x: 0.2, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(panels[3].rotation, { x: -0.2, ease: 'power2.inOut', duration: 20 }, 20);
+
+        // Inner Stack explodes vertically (matching the user's uploaded explode view)
+        tl.to(topCapGroup.position, { y: 1.2, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(pcbGroup.position, { y: 0.7, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(batteryGroup.position, { y: -0.9, ease: 'power2.inOut', duration: 20 }, 20);
+        tl.to(baseGroup.position, { y: -1.3, ease: 'power2.inOut', duration: 20 }, 20);
+        
+        // Phase 3: Hover/Drift (40% - 60%)
+        tl.to(rootGroup.rotation, { x: 0.2, z: 0.2, ease: 'sine.inOut', duration: 20 }, 40);
+        tl.to(panels[0].position, { z: 0.2, ease: 'sine.inOut', duration: 20 }, 40);
+        
+        // Phase 4: Reassemble (60% - 80%)
+        // Panels return
+        tl.to(panels[0].position, { x: 0.9, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[1].position, { x: -0.9, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[2].position, { z: 0.9, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[3].position, { z: -0.9, ease: 'power2.inOut', duration: 20 }, 60);
+        // Panels tilt back
+        tl.to(panels[0].rotation, { z: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[1].rotation, { z: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[2].rotation, { x: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(panels[3].rotation, { x: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        // Inner stack returns
+        tl.to(topCapGroup.position, { y: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(pcbGroup.position, { y: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(batteryGroup.position, { y: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        tl.to(baseGroup.position, { y: 0, ease: 'power2.inOut', duration: 20 }, 60);
+        // Restore rotation
+        tl.to(rootGroup.rotation, { x: 0, z: 0, ease: 'power2.inOut', duration: 20 }, 60);
+
+        // Phase 5: Perfect Cube state (80% - 100%) just holds.
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            stars.rotation.y += 0.0002; // Subtle star rotation
+            composer.render();
+        }
+        animate();
+
+        // --- RESIZE HANDLER ---
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+            composer.setSize(width, height);
+        });
+    </script>
+</body>
+</html>
